@@ -16,15 +16,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Database connection (serverless)
-let isConnected;
-async function connectDB() {
-  if (isConnected) return;
-  await mongoose.connect(process.env.MONGO_DB);
-  isConnected = true;
-  console.log("MongoDB Connected Successfully (Serverless)");
-}
-connectDB().catch(err => console.log("MongoDB Connection Failed:", err));
+// Database connection middleware for serverless environment
+const connectDB = async (req, res, next) => {
+  if (mongoose.connection.readyState >= 1) {
+    return next();
+  }
+  try {
+    if (!process.env.MONGO_DB) {
+      throw new Error("MONGO_DB environment variable is not defined on Vercel!");
+    }
+    await mongoose.connect(process.env.MONGO_DB);
+    console.log("MongoDB Connected Successfully (Serverless)");
+    next();
+  } catch (err) {
+    console.error("MongoDB Connection Failed:", err.message);
+    return res.status(500).json({ message: "Database connection failed", error: err.message });
+  }
+};
+
+app.use(connectDB);
 
 // Routes
 app.use("/auth", authRouter);
